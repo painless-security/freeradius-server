@@ -10,6 +10,7 @@ Build-Depends: @BUILDDEPS@ debhelper (>= 9),
  libgdbm-dev,
  libjson0 | libjson-c2 | libjson-c3 | libjson-c4 | libjson-c5,
  libjson0-dev | libjson-c-dev,
+ libkqueue-dev,
  libkrb5-dev | heimdal-dev,
  libldap2-dev,
  libpam0g-dev,
@@ -41,7 +42,7 @@ Homepage: http://www.freeradius.org/
 
 Package: freeradius
 Architecture: any
-Depends: lsb-base (>= 3.1-23.2), ${shlibs:Depends}, ${misc:Depends}, ${dist:Depends}, freeradius-common, freeradius-config, libfreeradius3 (= ${binary:Version}), ssl-cert, adduser
+Depends: lsb-base (>= 3.1-23.2), ${shlibs:Depends}, ${misc:Depends}, ${dist:Depends}, freeradius-common, freeradius-config, libfreeradius3 (= ${binary:Version}), libkqueue0t64, ssl-cert, adduser
 Provides: radius-server
 Recommends: freeradius-utils, freeradius-python3 @PYTWOPKG@
 Suggests: freeradius-ldap, freeradius-postgresql, freeradius-mysql, freeradius-krb5, snmp
