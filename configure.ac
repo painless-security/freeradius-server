@@ -1045,6 +1045,12 @@ AC_CHECK_LIB(nsl, inet_ntoa)
 AC_CHECK_LIB(ws2_32, htonl)
 
 dnl #
+dnl #  Check for -lkqueue
+dnl #  This library may be needed for kqueue.
+dnl #
+AC_SEARCH_LIBS([kqueue], [kqueue])
+
+dnl #
 dnl #  Check the pcap library for the RADIUS sniffer.
 dnl #
 dnl extra argument: --with-pcap-lib-dir=DIR
