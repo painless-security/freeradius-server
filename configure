@@ -8212,6 +8212,8 @@ ac_res=$ac_cv_search_kqueue
 if test "$ac_res" != no
 then :
   test "$ac_res" = "none required" || LIBS="$ac_res $LIBS"
+   CPPFLAGS="$CPPFLAGS -I/usr/include/kqueue"
+
 
 fi
 
