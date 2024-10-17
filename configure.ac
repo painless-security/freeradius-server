@@ -1048,7 +1048,10 @@ dnl #
 dnl #  Check for -lkqueue
 dnl #  This library may be needed for kqueue.
 dnl #
-AC_SEARCH_LIBS([kqueue], [kqueue])
+AC_SEARCH_LIBS([kqueue], 
+			   [kqueue],
+			   [ AC_SUBST(CPPFLAGS, "$CPPFLAGS -I/usr/include/kqueue") ]
+		   )
 
 dnl #
 dnl #  Check the pcap library for the RADIUS sniffer.
