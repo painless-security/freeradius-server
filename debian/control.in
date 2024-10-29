@@ -41,7 +41,7 @@ Homepage: http://www.freeradius.org/
 
 Package: freeradius
 Architecture: any
-Depends: lsb-base (>= 3.1-23.2), ${shlibs:Depends}, ${misc:Depends}, ${dist:Depends}, freeradius-common, freeradius-config, libfreeradius3 (= ${binary:Version}), libkqueue0t64, ssl-cert, adduser
+Depends: lsb-base (>= 3.1-23.2), ${shlibs:Depends}, ${misc:Depends}, ${dist:Depends}, freeradius-common, freeradius-config, libfreeradius3 (= ${binary:Version}), libkqueue0, ssl-cert, adduser
 Provides: radius-server
 Recommends: freeradius-utils, freeradius-python3 @PYTWOPKG@
 Suggests: freeradius-ldap, freeradius-postgresql, freeradius-mysql, freeradius-krb5, snmp
