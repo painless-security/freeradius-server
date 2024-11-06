@@ -28,13 +28,11 @@ RCSID("$Id$")
 #include "fixedds.h"
 #include "rlm_ratelimit.h"
 
-typedef Bucket* bucketRef;
-
-static bucketRef add_bucket(rlm_ratelimit_t *inst, RatelimitID id);
+static Bucket* add_bucket(rlm_ratelimit_t *inst, RatelimitID id);
 static uint64_t current_time_in_sec(void);
 static Bucket* get_bucket(rlm_ratelimit_t *inst, RatelimitID id);
 static int id_from_request(RatelimitID *id, REQUEST *request, char* buffer, uint bsize);
-static void log_ratelimit(RatelimitID id);
+static void log_ratelimit(Bucket *b, RatelimitID id, uint32_t lograte);
 static void *ratelimit_init_datastore(rlm_ratelimit_t *instance);
 static bool ratelimit_ok(rlm_ratelimit_t *inst, RatelimitID id);
 static uint tokens_to_add(uint64_t elapsed, uint32_t refreshrate);
@@ -56,13 +54,14 @@ static void *ratelimit_init_datastore(rlm_ratelimit_t *instance) {
 /*
  * add_bucket creates a new CSID token bucket, insert it into the datastore and returns a reference to it.
  */
-static bucketRef add_bucket(rlm_ratelimit_t *inst, RatelimitID id) {
+static Bucket *add_bucket(rlm_ratelimit_t *inst, RatelimitID id) {
 	Bucket b;
+	Bucket buffer;
 
-	b.tokens = inst->tokenmax;
-	b.accessed = current_time_in_sec();
+	b.ntokens = inst->tokenmax;
+	b.lastaccessed = current_time_in_sec();
 	DEBUG("ratelimit: add_bucket() created bucket for ID %s. Total allocated buckets: %d", id.key, ++numbuckets);
-	return insert(inst->datastore, b, id);
+	return insert(inst->datastore, b, id, &buffer);
 }
 
 /*
@@ -72,8 +71,9 @@ static void update_used_bucket(Bucket *b) {
 	if (!valid_bucket(b)) {
 		ERROR("ratelimit: update_used_bucket(): bucket index out of range");
 	}
-	b->tokens--;
-	b->accessed = current_time_in_sec();
+
+	(*(b->ntokens))--;
+	*(b->lastaccessed) = current_time_in_sec();
 }
 
 /*
@@ -89,10 +89,9 @@ static void update_bucket_tokens(Bucket *b, uint32_t maxtokens, uint32_t refresh
 		return;
 	}
 
-	nTokens = tokens_to_add(current_time_in_sec() - b->accessed, refreshrate);
-	DEBUG("ratelimit: update_bucket_tokens(): nTokens: %d", nTokens);
-	toks_to_add = (b->tokens+nTokens <= (uint) maxtokens) ? b->tokens+nTokens : maxtokens;
-	b->tokens = toks_to_add;
+	nTokens = tokens_to_add(current_time_in_sec() - *(b)->lastaccessed, refreshrate);
+	toks_to_add = (*(b)->ntokens+nTokens <= (uint) maxtokens) ? *(b)->ntokens+nTokens : maxtokens;
+	*(b)->ntokens = toks_to_add;
 }
 
 /*
@@ -129,16 +128,18 @@ static uint64_t current_time_in_sec(void) {
  */
 static Bucket* get_bucket(rlm_ratelimit_t *inst, RatelimitID id) {
 	Bucket *b = NULL;
+	Bucket buffer;
 
-	b = lookup(inst->datastore, id);
+	b = lookup(inst->datastore, id, &buffer);
 
 	/* bucket for ID doesn't exist. Add one. */
 	if (b == NULL) {
 		DEBUG("ratelimit: get_bucket(): bucket not found. Adding bucket: %s", id.key);
 		b = add_bucket(inst, id);
+		INFO("ratelimit: after add_bucket tokens %d", *(b->ntokens));
 	}
 
-	DEBUG("ratelimit: getbucket(): %s %d %llu", id.key, b->tokens, b->accessed);
+	DEBUG("ratelimit: getbucket(): %s %d %llu %llu", id.key, *(b->ntokens), *(b->lastaccessed), *(b->lastlogged));
 	return b;
 }
 
@@ -146,7 +147,7 @@ static Bucket* get_bucket(rlm_ratelimit_t *inst, RatelimitID id) {
  * ratelimit_ok returns true if the rate limit for RatelimitID hasn't been exceeded.
  */
 static bool ratelimit_ok(rlm_ratelimit_t *inst, RatelimitID id) {
-	Bucket *b;
+	Bucket b;
 
 	DEBUG("ratelimit: ratelimit_ok(): checking rate limit for %s", id.key);
 
@@ -154,22 +155,28 @@ static bool ratelimit_ok(rlm_ratelimit_t *inst, RatelimitID id) {
 	 * get the bucket for id. Update tokens to account for elapsed time since it
 	 * it was last accessed. Return false if the bucket has run out of tokens.
 	 */
-	b = get_bucket(inst, id);
-	update_bucket_tokens(b, inst->tokenmax, inst->refreshrate);
-	if (b->tokens <= 0) {
+	b = *get_bucket(inst, id);
+	update_bucket_tokens(&b, inst->tokenmax, inst->refreshrate);
+	if (*(b.ntokens) <= 0) {
+		log_ratelimit(&b, id, inst->lograte);
 		return false;
 	}
 
 	/* the request is within limits - update the bucket and return "OK" (true) */
-	update_used_bucket(b);
+	update_used_bucket(&b);
 	return true;
 }
 
 /*
  * log_ratelimit logs the ratelimit event for the RatelimitID.
+ * logs are written is determined by the "lograte".
  */
-static void log_ratelimit(RatelimitID id) {
-	WARN("ratelimit: request id %s ratelimited", id.key);
+static void log_ratelimit(Bucket *b, RatelimitID id, uint32_t lograte) {
+	uint64_t now = current_time_in_sec();
+	if (*(b->lastlogged) + lograte <= current_time_in_sec()) {
+		WARN("ratelimit: request id %s ratelimited", id.key);
+		*(b->lastlogged) = now;
+	}
 }
 
 /*
@@ -186,6 +193,7 @@ static int mod_instantiate(UNUSED CONF_SECTION *conf, void *instance) {
 	rad_assert(inst->refreshrate > 0);
 
 	inst->datastore = ratelimit_init_datastore(inst);
+	rad_assert(inst->datastore != NULL);
 	if (inst->datastore == NULL) {
 		return -1;
 	}
@@ -301,7 +309,6 @@ static rlm_rcode_t CC_HINT(nonnull) mod_pre_proxy(void *instance, REQUEST *reque
 		if (ok == 0) {
 			DEBUG("ratelimit: id returned from request: %s", id.key);
 			if (!ratelimit_ok(inst, id)) {
-				log_ratelimit(id);
 				return RLM_MODULE_REJECT;
 			}
 		} else {

@@ -35,14 +35,19 @@ typedef struct RatelimitID {
 } RatelimitID;
 
 typedef struct Bucket {
-    uint8_t tokens;
-    uint64_t accessed;
+    uint8_t *ntokens;
+    uint64_t *lastaccessed;
+    uint64_t *lastlogged;
 } Bucket;
 
 typedef struct BucketList {
-    Bucket *buckets;
+    uint8_t *tokens;
+    uint64_t *accessed;
+    uint64_t *lastlogged;
 } BucketList;
 
+typedef int32_t BucketRef;
+
 void *datastore_init(uint32_t listlength);
-Bucket *insert(void *datastore, Bucket data, RatelimitID id);
-Bucket *lookup(void *datastore, RatelimitID id);
+Bucket *insert(void *datastore, Bucket data, RatelimitID id, Bucket *b);
+Bucket *lookup(void *datastore, RatelimitID id, Bucket *b);

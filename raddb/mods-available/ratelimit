@@ -1,0 +1,13 @@
+# -*- text -*-
+#
+#  $Id$
+
+# RATELIMIT ...
+#
+#  http://www.openldap.org/faq/data/cache/347.html
+ratelimit {
+	refreshrate = 10
+	lograte = 5
+	tokenmax = 5
+}
+
