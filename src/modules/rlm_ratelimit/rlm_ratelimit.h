@@ -38,8 +38,9 @@ RCSIDH(ratelimit_h, "$Id$")
  *	be used as the instance handle.
  */
 typedef struct rlm_ratelimit_t {
-	uint32_t tokenmax;
-	uint32_t refreshrate;
+	uint32_t tokenmax;		// max number of rate limit tokens per bucket
+	uint32_t refreshrate;	// how frequently bucket tokens are replenished
+	uint32_t lograte;		// how frequently rate limit warnings are repeated
 	uint32_t datastoresize;
 
 	void *datastore;
@@ -51,6 +52,7 @@ typedef struct rlm_ratelimit_t {
 static const CONF_PARSER module_config[] = {
 	{ "tokenmax", FR_CONF_OFFSET(PW_TYPE_INTEGER, rlm_ratelimit_t, tokenmax), "10" },
 	{ "refreshrate", FR_CONF_OFFSET(PW_TYPE_INTEGER, rlm_ratelimit_t, refreshrate), "5" },
+	{ "lograte", FR_CONF_OFFSET(PW_TYPE_INTEGER, rlm_ratelimit_t, lograte), "5" },
 	{ "datastoresize", FR_CONF_OFFSET(PW_TYPE_INTEGER, rlm_ratelimit_t, datastoresize), "16777215" },
 	CONF_PARSER_TERMINATOR
 };
