@@ -30,7 +30,7 @@ RCSIDH(ratelimit_h, "$Id$")
 #include <freeradius-devel/modules.h>
 #include <freeradius-devel/rad_assert.h>
 
-/*
+/**
  *	Define a structure for our module configuration.
  *
  *	These variables do not need to be in a structure, but it's

@@ -28,10 +28,10 @@ RCSID("$Id$")
 #include "fixedds.h"
 #include "rlm_ratelimit.h"
 
-static Bucket* add_bucket(rlm_ratelimit_t *inst, RatelimitID id);
+static Bucket *add_bucket(rlm_ratelimit_t *inst, RatelimitID id);
 static uint64_t current_time_in_sec(void);
-static Bucket* get_bucket(rlm_ratelimit_t *inst, RatelimitID id);
-static int id_from_request(RatelimitID *id, REQUEST *request, char* buffer, uint bsize);
+static Bucket *get_bucket(rlm_ratelimit_t *inst, RatelimitID id);
+static int id_from_request(RatelimitID *id, REQUEST *request, char *buffer, uint bsize);
 static void log_ratelimit(Bucket *b, RatelimitID id, uint32_t lograte);
 static void *ratelimit_init_datastore(rlm_ratelimit_t *instance);
 static bool ratelimit_ok(rlm_ratelimit_t *inst, RatelimitID id);
@@ -90,7 +90,7 @@ static void update_bucket_tokens(Bucket *b, uint32_t maxtokens, uint32_t refresh
 	}
 
 	nTokens = tokens_to_add(current_time_in_sec() - *(b)->lastaccessed, refreshrate);
-	toks_to_add = (*(b)->ntokens+nTokens <= (uint) maxtokens) ? *(b)->ntokens+nTokens : maxtokens;
+	toks_to_add = (*(b)->ntokens + nTokens <= (uint)maxtokens) ? *(b)->ntokens + nTokens : maxtokens;
 	*(b)->ntokens = toks_to_add;
 }
 
@@ -116,9 +116,9 @@ static bool valid_bucket(Bucket *b) {
  * current_time_in_sec returns the current time in seconds since UNIX Epoch.
  */
 static uint64_t current_time_in_sec(void) {
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    return ts.tv_sec;
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	return ts.tv_sec;
 }
 
 /*
@@ -126,7 +126,7 @@ static uint64_t current_time_in_sec(void) {
  * doesn't exist a new bucket is created and a reference to the new bucket is
  * returned.
  */
-static Bucket* get_bucket(rlm_ratelimit_t *inst, RatelimitID id) {
+static Bucket *get_bucket(rlm_ratelimit_t *inst, RatelimitID id) {
 	Bucket *b = NULL;
 	Bucket buffer;
 
@@ -227,7 +227,7 @@ static rlm_rcode_t CC_HINT(nonnull) mod_accounting(UNUSED void *instance, UNUSED
  * logins by querying the terminal server (using eg. SNMP).
  */
 static rlm_rcode_t CC_HINT(nonnull) mod_checksimul(UNUSED void *instance, REQUEST *request) {
-	request->simul_count=0;
+	request->simul_count = 0;
 
 	return RLM_MODULE_OK;
 }
@@ -302,7 +302,7 @@ static rlm_rcode_t CC_HINT(nonnull) mod_pre_proxy(void *instance, REQUEST *reque
 	int ok;
 	RatelimitID id;
 
-    /* retrieve the calling_station_id from the request */
+	/* retrieve the calling_station_id from the request */
 	if (request->packet->code == PW_CODE_ACCESS_REQUEST) {
 		char buffer[128];
 		ok = id_from_request(&id, request, buffer, sizeof(buffer));
@@ -331,21 +331,21 @@ static rlm_rcode_t CC_HINT(nonnull) mod_pre_proxy(void *instance, REQUEST *reque
  */
 extern module_t rlm_ratelimit;
 module_t rlm_ratelimit = {
-	.magic		= RLM_MODULE_INIT,
-	.name		= "ratelimit",
-	.type		= RLM_TYPE_THREAD_SAFE,
-	.inst_size	= sizeof(rlm_ratelimit_t),
-	.config		= module_config,
-	.instantiate	= mod_instantiate,
-	.detach		= mod_detach,
+	.magic = RLM_MODULE_INIT,
+	.name = "ratelimit",
+	.type = RLM_TYPE_THREAD_SAFE,
+	.inst_size = sizeof(rlm_ratelimit_t),
+	.config = module_config,
+	.instantiate = mod_instantiate,
+	.detach = mod_detach,
 	.methods = {
 		// [MOD_AUTHENTICATE]	= mod_authenticate,
 		// [MOD_AUTHORIZE]		= mod_authorize,
-		[MOD_PRE_PROXY]		= mod_pre_proxy,
+		[MOD_PRE_PROXY] = mod_pre_proxy,
 #ifdef WITH_ACCOUNTING
-		[MOD_PREACCT]		= mod_preacct,
-		[MOD_ACCOUNTING]	= mod_accounting,
-		[MOD_SESSION]		= mod_checksimul
+		[MOD_PREACCT] = mod_preacct,
+		[MOD_ACCOUNTING] = mod_accounting,
+		[MOD_SESSION] = mod_checksimul
 #endif
 	},
 };
