@@ -27,11 +27,11 @@ RCSID("$Id$")
 
 #include "fixedds.h"
 
-static int index_from_id(RatelimitID id, uint32_t* index);
+static int index_from_id(RatelimitID id, uint32_t *index);
 
-void* datastore_init(uint32_t listlength)
+void *datastore_init(uint32_t listlength)
 {
-	BucketList* b;
+	BucketList *b;
 
 	INFO("ratelimit: datastore_init(): creating bucket store with capacity %d.", listlength);
 	INFO("ratelimit: datastore_init(): total capacity %lu.", sizeof(Bucket) * listlength);
@@ -39,11 +39,11 @@ void* datastore_init(uint32_t listlength)
 	b = talloc(NULL, BucketList);
 	fr_assert(b != NULL);
 
-	b->tokens = (uint8_t*)talloc_array_size(b, sizeof(uint8_t), listlength);
+	b->tokens = (uint8_t *)talloc_array_size(b, sizeof(uint8_t), listlength);
 	fr_assert(b->tokens != NULL);
-	b->accessed = (uint64_t*)talloc_array_size(b, sizeof(uint64_t), listlength);
+	b->accessed = (uint64_t *)talloc_array_size(b, sizeof(uint64_t), listlength);
 	fr_assert(b->accessed != NULL);
-	b->lastlogged = (uint64_t*)talloc_array_size(b, sizeof(uint64_t), listlength);
+	b->lastlogged = (uint64_t *)talloc_array_size(b, sizeof(uint64_t), listlength);
 	fr_assert(b->lastlogged != NULL);
 
 	DEBUG("ratelimit: datastore_init(): storage allocated: %ld bytes", talloc_total_size(b));
@@ -61,9 +61,9 @@ void* datastore_init(uint32_t listlength)
 /*
  * insert
  */
-Bucket* insert(void* datastore, Bucket data, RatelimitID id, Bucket* buffer)
+Bucket *insert(void *datastore, Bucket data, RatelimitID id, Bucket *buffer)
 {
-	BucketList* list = datastore;
+	BucketList *list = datastore;
 	uint32_t index;
 
 	list = datastore;
@@ -88,9 +88,9 @@ Bucket* insert(void* datastore, Bucket data, RatelimitID id, Bucket* buffer)
  * lookup returns the entry in the datastore with the given id or NULL if the datastore
  * doesn't contain an entry for id.
  */
-Bucket* lookup(void* datastore, RatelimitID id, Bucket* buffer)
+Bucket *lookup(void *datastore, RatelimitID id, Bucket *buffer)
 {
-	BucketList* list;
+	BucketList *list;
 	uint32_t index;
 
 	list = datastore;
@@ -111,7 +111,7 @@ Bucket* lookup(void* datastore, RatelimitID id, Bucket* buffer)
  * index_from_id return the left most 24 bit from mac address
  * TODO: pass in type to do a switch on.
  */
-static int index_from_id(RatelimitID id, uint32_t* index)
+static int index_from_id(RatelimitID id, uint32_t *index)
 {
 	uint values[8];
 	uint64_t int_val;
