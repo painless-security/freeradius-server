@@ -119,9 +119,23 @@ static int index_from_id(RatelimitID id, uint32_t *index)
 	switch (id.key_type)
 	{
 	case MACADDR:
-		/* Contains 6 components - use the last 3 octets (extension ID) as the index */
-		if (6 == sscanf(id.key, "%x:%x:%x:%x:%x:%x",
+		/*
+		 * Contains 6 components - use the last 3 octets (extension ID) as the index
+		 * In one of these formats:
+		 *    "8C:F0:71:C0:00:26"
+		 *    "8C-F0-71-C0-00-26"
+		 *    "8CF071C00026"
+		 *    "8CF0.71C0.0026"
+		*/
+		if ((6 == sscanf(id.key, "%x:%x:%x:%x:%x:%x",
+			&values[0], &values[1], &values[2], &values[3], &values[4], &values[5])) ||
+			(6 == sscanf(id.key, "%x-%x-%x-%x-%x-%x",
+			&values[0], &values[1], &values[2], &values[3], &values[4], &values[5])) ||
+			(6 == sscanf(id.key, "%2x%2x%2x%2x%2x%2x",
+			&values[0], &values[1], &values[2], &values[3], &values[4], &values[5])) ||
+			(6 == sscanf(id.key, "%2x%2x.%2x%2x.%2x%2x",
 			&values[0], &values[1], &values[2], &values[3], &values[4], &values[5]))
+			)
 		{
 			int_val = values[3] << 16 | values[4] << 8 | values[5];
 			(*index) = int_val;
