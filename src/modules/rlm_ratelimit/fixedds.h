@@ -49,5 +49,5 @@ typedef struct BucketList {
 typedef int32_t BucketRef;
 
 void *datastore_init(uint32_t listlength);
-Bucket *insert(void *datastore, Bucket data, RatelimitID id, Bucket *b);
-Bucket *lookup(void *datastore, RatelimitID id, Bucket *b);
+Bucket *insert(Bucket *buffer, void *datastore, Bucket data, RatelimitID id);
+Bucket *lookup(Bucket *buffer, void *datastore, RatelimitID id);

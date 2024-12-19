@@ -61,7 +61,7 @@ void *datastore_init(uint32_t listlength)
 /*
  * insert
  */
-Bucket *insert(void *datastore, Bucket data, RatelimitID id, Bucket *buffer)
+Bucket *insert(Bucket *buffer, void *datastore, const Bucket data, const RatelimitID id)
 {
 	BucketList *list = datastore;
 	uint32_t index;
@@ -88,7 +88,7 @@ Bucket *insert(void *datastore, Bucket data, RatelimitID id, Bucket *buffer)
  * lookup returns the entry in the datastore with the given id or NULL if the datastore
  * doesn't contain an entry for id.
  */
-Bucket *lookup(void *datastore, RatelimitID id, Bucket *buffer)
+Bucket *lookup(Bucket *buffer, void *datastore, const RatelimitID id)
 {
 	BucketList *list;
 	uint32_t index;

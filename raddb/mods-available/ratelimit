@@ -2,12 +2,28 @@
 #
 #  $Id$
 
-# RATELIMIT ...
+# Configuration for the ratelimit module. This module enables rate limiting of proxied access-requests
+# by devices identified by the request's calling_station_id (CSID).
 #
-#  http://www.openldap.org/faq/data/cache/347.html
+# To use, add "ratelimit" to the pre-proxy stanza, for instance:
+#
+#   pre-proxy {
+#        ...
+#
+#        ratelimit
+#
+#        ...
+#    }
+#
 ratelimit {
-	refreshrate = 10
-	lograte = 5
-	tokenmax = 5
-}
+    # The maximum number of tokens a ratelimit bucket (a CSID) can contain.
+    # At startup buckets are intialised to this value.
+    tokenmax = 5
 
+    # How frequently (seconds) tokens are re-added to a bucket - up to tokenmax.
+    refreshrate = 10
+
+    # log ratelimited rejects for a CSID after lograte seconds have elapsed since it was last logged.
+    # A value of 0 always logs.
+    lograte = 5
+}

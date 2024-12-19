@@ -1,5 +1,5 @@
 /*
- *   This program is is free software; you can redistribute it and/or modify
+ *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
  *   the Free Software Foundation; either version 2 of the License, or (at
  *   your option) any later version.
@@ -28,10 +28,10 @@ RCSID("$Id$")
 #include "fixedds.h"
 #include "rlm_ratelimit.h"
 
-static Bucket *add_bucket(rlm_ratelimit_t *inst, RatelimitID id);
+static Bucket *add_bucket(Bucket *buffer, rlm_ratelimit_t *inst, RatelimitID id);
 static uint64_t current_time_in_sec(void);
-static Bucket *get_bucket(rlm_ratelimit_t *inst, RatelimitID id);
-static int id_from_request(RatelimitID *id, REQUEST *request, char *buffer, uint bsize);
+static Bucket *get_bucket(Bucket *buffer, rlm_ratelimit_t *inst, RatelimitID id);
+static int id_from_request(RatelimitID *id, const REQUEST *request);
 static void log_ratelimit(Bucket *b, RatelimitID id, uint32_t lograte);
 static void *ratelimit_init_datastore(rlm_ratelimit_t *instance);
 static bool ratelimit_ok(rlm_ratelimit_t *inst, RatelimitID id);
@@ -54,14 +54,13 @@ static void *ratelimit_init_datastore(rlm_ratelimit_t *instance) {
 /*
  * add_bucket creates a new CSID token bucket, insert it into the datastore and returns a reference to it.
  */
-static Bucket *add_bucket(rlm_ratelimit_t *inst, RatelimitID id) {
+static Bucket *add_bucket(Bucket *buffer, rlm_ratelimit_t *inst, RatelimitID id) {
 	Bucket b;
-	Bucket buffer;
 
 	b.ntokens = inst->tokenmax;
 	b.lastaccessed = current_time_in_sec();
 	DEBUG("ratelimit: add_bucket() created bucket for ID %s. Total allocated buckets: %d", id.key, ++numbuckets);
-	return insert(inst->datastore, b, id, &buffer);
+	return insert(buffer, inst->datastore, b, id);
 }
 
 /*
@@ -121,41 +120,50 @@ static uint64_t current_time_in_sec(void) {
 	return ts.tv_sec;
 }
 
-/*
- * get_bucket returns a reference to the token bucket with the specified id. If the id
- * doesn't exist a new bucket is created and a reference to the new bucket is
- * returned.
+/** returns a point to the bucket with the specified id. If a bucket with id doesn't exist
+ *  a new bucket is created and a reference to the new bucket is returned.
+ *
+ * @param[out] buffer	Where the bucket is written.
+ * @param[in] inst		This session's rate limit instance data.
+ * @param[in] id		The id of the bucket (existing or new).
+ * @return
+ *		- a pointer to bucket.
  */
-static Bucket *get_bucket(rlm_ratelimit_t *inst, RatelimitID id) {
+static Bucket *get_bucket(Bucket *buffer, rlm_ratelimit_t *inst, const RatelimitID id) {
 	Bucket *b = NULL;
-	Bucket buffer;
 
-	b = lookup(inst->datastore, id, &buffer);
+	b = lookup(buffer, inst->datastore, id);
 
-	/* bucket for ID doesn't exist. Add one. */
+	/* bucket for id doesn't exist. Add one. */
 	if (b == NULL) {
 		DEBUG("ratelimit: get_bucket(): bucket not found. Adding bucket: %s", id.key);
-		b = add_bucket(inst, id);
+		b = add_bucket(buffer, inst, id);
 		INFO("ratelimit: after add_bucket tokens %d", *(b->ntokens));
 	}
 
-	DEBUG("ratelimit: getbucket(): %s %d %llu %llu", id.key, *(b->ntokens), *(b->lastaccessed), *(b->lastlogged));
+	DEBUG("ratelimit: get_bucket(): %s %d %llu %llu", id.key, *(b->ntokens), *(b->lastaccessed), *(b->lastlogged));
 	return b;
 }
 
-/*
- * ratelimit_ok returns true if the rate limit for RatelimitID hasn't been exceeded.
+/** Check if the rate limit for RatelimitID has been exceeded.
+ *
+ * @param[in] inst	This session's rate limit instance data.
+ * @param[in] id	The RatelimitID of the incoming request to check.
+ * @return
+ *		- true if the rate limit for the request hasn't been exceeded.
+ *		- false if the rate limit for the request has been exceeded.
  */
-static bool ratelimit_ok(rlm_ratelimit_t *inst, RatelimitID id) {
+static bool ratelimit_ok(rlm_ratelimit_t *inst, const RatelimitID id) {
 	Bucket b;
+	Bucket buffer;
 
 	DEBUG("ratelimit: ratelimit_ok(): checking rate limit for %s", id.key);
 
 	/*
 	 * get the bucket for id. Update tokens to account for elapsed time since it
-	 * it was last accessed. Return false if the bucket has run out of tokens.
+	 * was last accessed. Return false if the bucket has run out of tokens.
 	 */
-	b = *get_bucket(inst, id);
+	b = *get_bucket(&buffer, inst, id);
 	update_bucket_tokens(&b, inst->tokenmax, inst->refreshrate);
 	if (*(b.ntokens) <= 0) {
 		log_ratelimit(&b, id, inst->lograte);
@@ -168,8 +176,8 @@ static bool ratelimit_ok(rlm_ratelimit_t *inst, RatelimitID id) {
 }
 
 /*
- * log_ratelimit logs the ratelimit event for the RatelimitID.
- * logs are written is determined by the "lograte".
+ * log_ratelimit logs the ratelimit event for the RatelimitID. A log is written
+ * for the id if it is lograte seconds since it was last logged.
  */
 static void log_ratelimit(Bucket *b, RatelimitID id, uint32_t lograte) {
 	uint64_t now = current_time_in_sec();
@@ -194,9 +202,6 @@ static int mod_instantiate(UNUSED CONF_SECTION *conf, void *instance) {
 
 	inst->datastore = ratelimit_init_datastore(inst);
 	rad_assert(inst->datastore != NULL);
-	if (inst->datastore == NULL) {
-		return -1;
-	}
 
 	return 0;
 }
@@ -210,7 +215,7 @@ static rlm_rcode_t CC_HINT(nonnull) mod_preacct(UNUSED void *instance, UNUSED RE
 }
 
 /*
- * Write accounting information to this modules database.
+ * Write accounting information to this module's database.
  */
 static rlm_rcode_t CC_HINT(nonnull) mod_accounting(UNUSED void *instance, UNUSED REQUEST *request) {
 	return RLM_MODULE_OK;
@@ -255,17 +260,19 @@ static int mod_detach(void *instance) {
 	return 0;
 }
 
-/*
- * id_from_request creates a RatelimitID for the request. The ID is created from the
- * the calling_station_id attribute. If request doesn't contain a calling_station_id
- * the ReatelimitID is created from the request's source IP address, which require
- * the buffer and bsize arguments.
+/** Creates a RatelimitID for the request. The ID is created from the calling_station_id attribute. If the
+ *  request doesn't contain a calling_station_id the ID is created from the request's source IP address.
  *
- * Returns 0 on success or -1 on error.
+ * @param[out] id		Where the RatelimitID is written.
+ * @param[in] request	The request to parse.
+ * @return
+ *		- 0 on success
+ *		- -1 on failure
  */
-static int id_from_request(RatelimitID *id, REQUEST *request, char *buffer, uint bsize) {
-	VALUE_PAIR *vp;
+static int CC_HINT(nonnull) id_from_request(RatelimitID *id, const REQUEST *request) {
+	const VALUE_PAIR *vp;
 	const char *ip;
+	char buffer[128];
 
 	/* create the ID from the calling_station_id if present */
 	vp = fr_pair_find_by_num(request->packet->vps, PW_CALLING_STATION_ID, 0, TAG_ANY);
@@ -276,7 +283,7 @@ static int id_from_request(RatelimitID *id, REQUEST *request, char *buffer, uint
 	}
 
 	/* no calling_station_id attribute so fall back to using the src_ip (ipv4 or ipv6) */
-	ip = inet_ntop(request->packet->src_ipaddr.af, &request->packet->src_ipaddr.ipaddr, buffer, bsize);
+	ip = inet_ntop(request->packet->src_ipaddr.af, &request->packet->src_ipaddr.ipaddr, buffer, sizeof(buffer));
 	if (ip) {
 		id->key = ip;
 		if (request->packet->src_ipaddr.af == AF_INET) {
@@ -292,20 +299,21 @@ static int id_from_request(RatelimitID *id, REQUEST *request, char *buffer, uint
 	return -1;
 }
 
-/*
- * Retrieve the calling_station_id from the request and return a RLM_MODULE_REJECT if the
- * request for this session exceeds the rate limit.
- * Return OK/NOP if the request doesn't contain a calling_station_id.
+/** Checks if the incoming request should be rate limited.
+ *
+ * @param[in] instance	This session's instance data.
+ * @param[in] request	The incoming request.
+ * @return
+ *		- RLM_MODULE_OK if the request isn't rate limited or doesn't contain a calling_station_id.
+ *		- RLM_MODULE_REJECT if the request for this session exceeds the rate limit.
  */
 static rlm_rcode_t CC_HINT(nonnull) mod_pre_proxy(void *instance, REQUEST *request) {
 	rlm_ratelimit_t *inst = instance;
-	int ok;
 	RatelimitID id;
 
 	/* retrieve the calling_station_id from the request */
 	if (request->packet->code == PW_CODE_ACCESS_REQUEST) {
-		char buffer[128];
-		ok = id_from_request(&id, request, buffer, sizeof(buffer));
+		const int ok = id_from_request(&id, request);
 		if (ok == 0) {
 			DEBUG("ratelimit: id returned from request: %s", id.key);
 			if (!ratelimit_ok(inst, id)) {
@@ -339,8 +347,6 @@ module_t rlm_ratelimit = {
 	.instantiate = mod_instantiate,
 	.detach = mod_detach,
 	.methods = {
-		// [MOD_AUTHENTICATE]	= mod_authenticate,
-		// [MOD_AUTHORIZE]		= mod_authorize,
 		[MOD_PRE_PROXY] = mod_pre_proxy,
 #ifdef WITH_ACCOUNTING
 		[MOD_PREACCT] = mod_preacct,
