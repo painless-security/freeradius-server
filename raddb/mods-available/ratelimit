@@ -17,7 +17,7 @@
 #
 ratelimit {
     # The maximum number of tokens a ratelimit bucket (a CSID) can contain.
-    # At startup buckets are intialised to this value.
+    # At startup buckets are initialised to this value.
     tokenmax = 5
 
     # How frequently (seconds) tokens are re-added to a bucket - up to tokenmax.

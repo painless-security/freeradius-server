@@ -32,7 +32,7 @@ static Bucket *add_bucket(Bucket *buffer, rlm_ratelimit_t *inst, RatelimitID id)
 static uint64_t current_time_in_sec(void);
 static Bucket *get_bucket(Bucket *buffer, rlm_ratelimit_t *inst, RatelimitID id);
 static int id_from_request(RatelimitID *id, const REQUEST *request);
-static void log_ratelimit(Bucket *b, RatelimitID id, uint32_t lograte);
+static void log_ratelimit(const Bucket *b, RatelimitID id, uint32_t lograte);
 static void *ratelimit_init_datastore(rlm_ratelimit_t *instance);
 static bool ratelimit_ok(rlm_ratelimit_t *inst, RatelimitID id);
 static uint tokens_to_add(uint64_t elapsed, uint32_t refreshrate);
@@ -175,12 +175,15 @@ static bool ratelimit_ok(rlm_ratelimit_t *inst, const RatelimitID id) {
 	return true;
 }
 
-/*
- * log_ratelimit logs the ratelimit event for the RatelimitID. A log is written
- * for the id if it is lograte seconds since it was last logged.
+/** logs the rate limited event for the id. A log is written if it is logrotate
+ *  seconds since it was last logged.
+ *
+ * @param[out] b		Update the bucket with the last logged time.
+ * @param[in] id		Data to include in the log message.
+ * @param[in] lograte	Time (seconds) to wait since event was last logged for id.
  */
-static void log_ratelimit(Bucket *b, RatelimitID id, uint32_t lograte) {
-	uint64_t now = current_time_in_sec();
+static void log_ratelimit(const Bucket *b, const RatelimitID id, const uint32_t lograte) {
+	const uint64_t now = current_time_in_sec();
 	if (*(b->lastlogged) + lograte <= current_time_in_sec()) {
 		WARN("ratelimit: request id %s ratelimited", id.key);
 		*(b->lastlogged) = now;
