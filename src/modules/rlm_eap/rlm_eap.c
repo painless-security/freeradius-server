@@ -619,7 +619,7 @@ static rlm_rcode_t CC_HINT(nonnull) mod_pre_proxy(UNUSED void *instance, REQUEST
 	 *	length (1 byte) in order to get the EAP length.
 	 */
 	for (eap_length = 0; vp != NULL; vp = vp->next) {
-		RDEBUG("Adding %i to eap_length (currently %i) for value pair", vp->vp_length - 2, eap_length)
+		RDEBUG("Adding %u to eap_length (currently %i) for value pair", vp->vp_length - 2, eap_length)
 		eap_length += vp->vp_length - 2;
 	}
 
