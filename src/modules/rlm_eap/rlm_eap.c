@@ -623,7 +623,7 @@ static rlm_rcode_t CC_HINT(nonnull) mod_pre_proxy(UNUSED void *instance, REQUEST
 	}
 
 	if (length != eap_length) {
-		RDEBUG("EAP length does not match attribute length");
+		RDEBUG("EAP length (%i) does not match attribute length (%i)", eap_length, length);
 		goto add_error_cause;
 	}
 
