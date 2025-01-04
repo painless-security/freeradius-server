@@ -614,9 +614,12 @@ static rlm_rcode_t CC_HINT(nonnull) mod_pre_proxy(UNUSED void *instance, REQUEST
 
 	/*
 	 *	Get length of all EAP-Message attributes
+	 *	Each RADIUS attribute length must be reduced by the size of
+	 *	the RADIUS attribute type (1 byte) and the RADIUS attribute
+	 *	length (1 byte) in order to get the EAP length.
 	 */
 	for (eap_length = 0; vp != NULL; vp = vp->next) {
-		eap_length += vp->vp_length;
+		eap_length += vp->vp_length - 2;
 	}
 
 	if (length != eap_length) {
