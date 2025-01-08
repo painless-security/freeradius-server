@@ -272,7 +272,6 @@ static int mod_detach(void *instance) {
 static int CC_HINT(nonnull) id_from_request(RatelimitID *id, const REQUEST *request) {
 	const VALUE_PAIR *vp;
 	const char *ip;
-	char buffer[128];
 
 	/* create the ID from the calling_station_id if present */
 	vp = fr_pair_find_by_num(request->packet->vps, PW_CALLING_STATION_ID, 0, TAG_ANY);
@@ -283,9 +282,11 @@ static int CC_HINT(nonnull) id_from_request(RatelimitID *id, const REQUEST *requ
 	}
 
 	/* no calling_station_id attribute so fall back to using the src_ip (ipv4 or ipv6) */
-	ip = inet_ntop(request->packet->src_ipaddr.af, &request->packet->src_ipaddr.ipaddr, buffer, sizeof(buffer));
+	ip = inet_ntop(request->packet->src_ipaddr.af,
+	        &request->packet->src_ipaddr.ipaddr,
+	        id->key,
+	        INET6_ADDRSTRLEN);
 	if (ip) {
-		id->key = ip;
 		if (request->packet->src_ipaddr.af == AF_INET) {
 			id->key_type = IPV4;
 		} else if (request->packet->src_ipaddr.af == AF_INET6) {

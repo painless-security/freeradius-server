@@ -26,11 +26,12 @@
 RCSIDH(fixedds_h, "$Id$")
 
 #include <freeradius-devel/radiusd.h>
+#include <arpa/inet.h>
 
 enum IDType { NONE, MACADDR, IPV4, IPV6 };
 
 typedef struct RatelimitID {
-	const char *key;
+	char key[INET6_ADDRSTRLEN];
 	enum IDType key_type;
 } RatelimitID;
 
