@@ -97,7 +97,7 @@ static void update_bucket_tokens(Bucket *b, uint32_t maxtokens, uint32_t refresh
  * tokens_to_add returns the number of tokens to add for the elapse time for the update_period
  */
 static uint tokens_to_add(uint64_t elapsed, uint32_t refreshrate) {
-	DEBUG("ratelimit: tokens_to_add(): elapsed: %llu refreshrate %d", elapsed, refreshrate);
+	DEBUG("ratelimit: tokens_to_add(): elapsed: %lu refreshrate %d", elapsed, refreshrate);
 	return elapsed / refreshrate;
 }
 
@@ -141,7 +141,7 @@ static Bucket *get_bucket(Bucket *buffer, rlm_ratelimit_t *inst, const Ratelimit
 		INFO("ratelimit: after add_bucket tokens %d", *(b->ntokens));
 	}
 
-	DEBUG("ratelimit: get_bucket(): %s %d %llu %llu", id.key, *(b->ntokens), *(b->lastaccessed), *(b->lastlogged));
+	DEBUG("ratelimit: get_bucket(): %s %d %lu %lu", id.key, *(b->ntokens), *(b->lastaccessed), *(b->lastlogged));
 	return b;
 }
 
@@ -272,20 +272,21 @@ static int mod_detach(void *instance) {
 static int CC_HINT(nonnull) id_from_request(RatelimitID *id, const REQUEST *request) {
 	const VALUE_PAIR *vp;
 	const char *ip;
-	char buffer[128];
 
 	/* create the ID from the calling_station_id if present */
 	vp = fr_pair_find_by_num(request->packet->vps, PW_CALLING_STATION_ID, 0, TAG_ANY);
 	if (vp) {
-		id->key = vp->vp_strvalue;
+		strlcpy(id->key, vp->vp_strvalue, sizeof(id->key));
 		id->key_type = MACADDR;
 		return 0;
 	}
 
 	/* no calling_station_id attribute so fall back to using the src_ip (ipv4 or ipv6) */
-	ip = inet_ntop(request->packet->src_ipaddr.af, &request->packet->src_ipaddr.ipaddr, buffer, sizeof(buffer));
+	ip = inet_ntop(request->packet->src_ipaddr.af,
+	        &request->packet->src_ipaddr.ipaddr,
+	        id->key,
+	        INET6_ADDRSTRLEN);
 	if (ip) {
-		id->key = ip;
 		if (request->packet->src_ipaddr.af == AF_INET) {
 			id->key_type = IPV4;
 		} else if (request->packet->src_ipaddr.af == AF_INET6) {
