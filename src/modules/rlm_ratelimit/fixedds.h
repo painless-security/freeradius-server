@@ -32,6 +32,7 @@ enum IDType { NONE, MACADDR, IPV4, IPV6 };
 
 typedef struct RatelimitID {
 	char key[INET6_ADDRSTRLEN];
+	char client_ip_address[INET6_ADDRSTRLEN];
 	enum IDType key_type;
 } RatelimitID;
 

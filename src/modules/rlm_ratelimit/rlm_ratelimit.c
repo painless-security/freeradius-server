@@ -182,7 +182,7 @@ static bool ratelimit_ok(rlm_ratelimit_t *inst, const RatelimitID id) {
 static void log_ratelimit(Bucket *b, RatelimitID id, uint32_t lograte) {
 	uint64_t now = current_time_in_sec();
 	if (*(b->lastlogged) + lograte <= current_time_in_sec()) {
-		WARN("ratelimit: request id %s ratelimited", id.key);
+		WARN("ratelimit: request id %s for client %s ratelimited", id.key, id.client_ip_address);
 		*(b->lastlogged) = now;
 	}
 }
@@ -273,27 +273,30 @@ static int CC_HINT(nonnull) id_from_request(RatelimitID *id, const REQUEST *requ
 	const VALUE_PAIR *vp;
 	const char *ip;
 
-	/* create the ID from the calling_station_id if present */
-	vp = fr_pair_find_by_num(request->packet->vps, PW_CALLING_STATION_ID, 0, TAG_ANY);
-	if (vp) {
-		strlcpy(id->key, vp->vp_strvalue, sizeof(id->key));
-		id->key_type = MACADDR;
-		return 0;
-	}
+	/* Set the default key type to NONE to indicate that we don't have one yet */
+	id->key_type = NONE;
 
-	/* no calling_station_id attribute so fall back to using the src_ip (ipv4 or ipv6) */
+	/* store the src_ip (ipv4 or ipv6) */
 	ip = inet_ntop(request->packet->src_ipaddr.af,
 	        &request->packet->src_ipaddr.ipaddr,
-	        id->key,
+	        id->client_ip_address,
 	        INET6_ADDRSTRLEN);
 	if (ip) {
 		if (request->packet->src_ipaddr.af == AF_INET) {
 			id->key_type = IPV4;
 		} else if (request->packet->src_ipaddr.af == AF_INET6) {
 			id->key_type = IPV6;
-		} else {
-			id->key_type = NONE;
 		}
+	}
+
+	/* create the ID from the calling_station_id if present */
+	vp = fr_pair_find_by_num(request->packet->vps, PW_CALLING_STATION_ID, 0, TAG_ANY);
+	if (vp) {
+		strlcpy(id->key, vp->vp_strvalue, sizeof(id->key));
+		id->key_type = MACADDR;
+		return 0;
+	} else if (NONE != id->key_type) {
+		strlcpy(id->key, id->client_ip_address, sizeof(id->key));
 		return 0;
 	}
 
