@@ -108,4 +108,14 @@ proxy_rate_limit {
 	#  the rate limiting will start, and the proxy will send a reject.
 	#
 	window = 1
+
+	#
+	#  Message for logging rate limiting.  This message is emitted once
+	#  every %{log_message_period} seconds (see below)
+	log_message = "Rate limited %{User-Name} %{Calling-Station-Id}"
+
+	#
+	#  How often, in seconds, to log that a User-Name/Calling-Station-Id
+	#  combination is rate limited.
+	log_message_period = 1
 }
