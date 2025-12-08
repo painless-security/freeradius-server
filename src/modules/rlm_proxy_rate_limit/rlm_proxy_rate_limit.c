@@ -116,6 +116,7 @@ struct rlm_proxy_rate_limit_s {
 	uint32_t			idle_timeout;
 	uint32_t			num_subtables;
 	uint32_t			window;
+	bool				log_enabled;
 	uint32_t			log_message_period;
 	char const			*log_message;
 
@@ -127,6 +128,7 @@ static const CONF_PARSER module_config[] = {
 	{ "idle_timeout", FR_CONF_OFFSET(PW_TYPE_INTEGER, rlm_proxy_rate_limit_t, idle_timeout), "2" },
 	{ "num_subtables", FR_CONF_OFFSET(PW_TYPE_INTEGER, rlm_proxy_rate_limit_t, num_subtables), "256" },
 	{ "window", FR_CONF_OFFSET(PW_TYPE_INTEGER, rlm_proxy_rate_limit_t, window), "1"},
+	{ "log_enabled", FR_CONF_OFFSET(PW_TYPE_BOOLEAN, rlm_proxy_rate_limit_t, log_enabled), "no"},
 	{ "log_message_period", FR_CONF_OFFSET(PW_TYPE_INTEGER, rlm_proxy_rate_limit_t, log_message_period), "1"},
 	{ "log_message", FR_CONF_OFFSET(PW_TYPE_STRING, rlm_proxy_rate_limit_t, log_message), "Rate limited %{User-Name} %{Calling-Station-Id}"},
 	CONF_PARSER_TERMINATOR
@@ -330,7 +332,7 @@ static int CC_HINT(nonnull) mod_common(void * instance, REQUEST *request)
 	 *  Emit a log message about the rate limiting once every
 	 *  inst->log_message_period seconds.
 	 */
-	if ((request->timestamp - entry->last_log_message) >= inst->log_message_period) {
+	if (inst->log_enabled && (request->timestamp - entry->last_log_message) >= inst->log_message_period) {
 		char log_msg[2048];
 
 		if (radius_xlat(log_msg, sizeof(log_msg), request, inst->log_message, NULL, NULL) < 0) {
