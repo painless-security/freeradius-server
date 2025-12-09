@@ -611,6 +611,7 @@ REQUEST *request_alloc(TALLOC_CTX *ctx)
 #ifdef WITH_PROXY
 	request->proxy_reply = NULL;
 #endif
+	request->ctx = request;
 	request->config = NULL;
 	request->username = NULL;
 	request->password = NULL;
@@ -1533,6 +1534,8 @@ void rad_suid_up(void)
 		ERROR("Failed getting saved UID's");
 		fr_exit_now(1);
 	}
+
+	if (euid == suid) return;
 
 	if (setresuid(-1, suid, -1) < 0) {
 		ERROR("Failed switching to privileged user");

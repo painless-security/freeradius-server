@@ -152,6 +152,7 @@ typedef void (*sig_t)(int);
 #define TAG_VALID(x)		((x) > 0 && (x) < 0x20)
 #define TAG_VALID_ZERO(x)	((x) < 0x20)
 #define TAG_ANY			INT8_MIN
+#define TAG_VALUE		(INT8_MIN + 1)
 #define TAG_NONE		0
 /** Check if tags are equal
  *
@@ -257,13 +258,13 @@ typedef union value_data {
 	uint32_t		integer;			//!< 32bit unsigned integer.
 	struct in_addr		ipaddr;				//!< IPv4 Address.
 	uint32_t		date;				//!< Date (32bit Unix timestamp).
-	size_t			filter[32/sizeof(size_t)];	//!< Ascend binary format a packed data
-								//!< structure.
+	uint8_t			*filter;			//!< ascend data filter
 
 	uint8_t			ifid[8];			//!< IPv6 interface ID (should be struct?).
 	struct in6_addr		ipv6addr;			//!< IPv6 Address.
 	uint8_t			ipv6prefix[18];			//!< IPv6 prefix (should be struct?).
 
+	bool			boolean;       			//!< boolean
 	uint8_t			byte;				//!< 8bit unsigned integer.
 	uint16_t		ushort;				//!< 16bit unsigned integer.
 
@@ -362,6 +363,7 @@ typedef struct value_pair_raw {
 #define vp_ifid		data.ifid
 #define vp_ipv6addr	data.ipv6addr
 #define vp_ipv6prefix	data.ipv6prefix
+#define vp_boolean	data.boolean
 #define vp_byte		data.byte
 #define vp_short	data.ushort
 #define vp_ether	data.ether
@@ -647,6 +649,7 @@ VALUE_PAIR	*fr_cursor_remove(vp_cursor_t *cursor);
 VALUE_PAIR	*fr_cursor_replace(vp_cursor_t *cursor, VALUE_PAIR *new);
 void		fr_pair_delete_by_num(VALUE_PAIR **, unsigned int attr, unsigned int vendor, int8_t tag);
 void		fr_pair_delete_by_da(VALUE_PAIR **first, DICT_ATTR const *da);
+void		fr_pair_delete(VALUE_PAIR **first, VALUE_PAIR *vp);
 void		fr_pair_add(VALUE_PAIR **, VALUE_PAIR *);
 void		fr_pair_prepend(VALUE_PAIR **, VALUE_PAIR *);
 void		fr_pair_replace(VALUE_PAIR **first, VALUE_PAIR *add);
@@ -807,7 +810,7 @@ void		fr_talloc_verify_cb(const void *ptr, int depth,
 
 #ifdef WITH_ASCEND_BINARY
 /* filters.c */
-int		ascend_parse_filter(value_data_t *out, char const *value, size_t len);
+int		ascend_parse_filter(TALLOC_CTX *ctx, value_data_t *out, char const *value, size_t len);
 void		print_abinary(char *out, size_t outlen, uint8_t const *data, size_t len, int8_t quote);
 #endif /*WITH_ASCEND_BINARY*/
 
@@ -958,6 +961,7 @@ int		fr_fifo_push(fr_fifo_t *fi, void *data);
 void		*fr_fifo_pop(fr_fifo_t *fi);
 void		*fr_fifo_peek(fr_fifo_t *fi);
 unsigned int	fr_fifo_num_elements(fr_fifo_t *fi);
+bool		fr_fifo_full(fr_fifo_t *fi);
 
 /*
  *	socket.c

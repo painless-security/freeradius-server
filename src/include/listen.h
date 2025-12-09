@@ -43,13 +43,13 @@ typedef enum RAD_LISTEN_TYPE {
 } RAD_LISTEN_TYPE;
 
 typedef enum RAD_LISTEN_STATUS {
-	RAD_LISTEN_STATUS_INIT = 0,
-	RAD_LISTEN_STATUS_KNOWN,
-	RAD_LISTEN_STATUS_PAUSE,
-	RAD_LISTEN_STATUS_RESUME,
-	RAD_LISTEN_STATUS_FROZEN,
-	RAD_LISTEN_STATUS_EOL,
-	RAD_LISTEN_STATUS_REMOVE_NOW
+	RAD_LISTEN_STATUS_INIT = 0,		//!< starting up
+	RAD_LISTEN_STATUS_KNOWN,		//!< alive and operating normally
+	RAD_LISTEN_STATUS_PAUSE,		//!< TLS connection checking: don't read normal packets
+	RAD_LISTEN_STATUS_RESUME,		//!< TLS connection checking: resume reading normal packets
+	RAD_LISTEN_STATUS_FROZEN,		//!< alive, but we're not sending any more packets to it
+	RAD_LISTEN_STATUS_EOL,			//!< we're trying to delete it.
+	RAD_LISTEN_STATUS_REMOVE_NOW		//!< no request is using it, delete the listener.
 } RAD_LISTEN_STATUS;
 
 typedef struct rad_listen rad_listen_t;
@@ -77,6 +77,7 @@ struct rad_listen {
 
 	bool		dual;
 	bool		proxy_protocol;		//!< haproxy protocol
+	bool		listen;			//! just calls listen()
 #endif
 	bool		nodup;
 	bool		synchronous;
@@ -141,6 +142,8 @@ typedef struct listen_socket_t {
 	fr_ipaddr_t	my_ipaddr;
 	uint16_t	my_port;
 
+	uint32_t	backlog;
+
 	char const	*interface;
 #ifdef SO_BROADCAST
 	int		broadcast;
@@ -195,6 +198,8 @@ typedef struct listen_socket_t {
 		LISTEN_TLS_SETUP,
 		LISTEN_TLS_RUNNING,
 	} state;
+
+	bool		client_closed;
 
 #ifdef WITH_RADIUSV11
 	bool		alpn_checked;

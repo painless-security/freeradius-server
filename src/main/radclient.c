@@ -1070,6 +1070,13 @@ static int send_one_packet(rc_request_t *request)
 
 		if (fr_debug_lvl > 2) rad_print_hex(request->packet);
 
+		if ((fr_debug_lvl > 0) &&
+		    ((request->packet->code == PW_CODE_ACCESS_REQUEST) ||
+		     (request->packet->code == PW_CODE_STATUS_SERVER)) &&
+		    !fr_pair_find_by_num(request->packet->vps, PW_MESSAGE_AUTHENTICATOR, 0, TAG_ANY)) {
+			fprintf(fr_log_fp, "\tMessage-Authenticator = 0x\n");
+		}
+
 		if (fr_debug_lvl > 0) vp_printlist(fr_log_fp, request->packet->vps);
 	}
 
@@ -1098,6 +1105,7 @@ static int blast_radius_check(rc_request_t *request, RADIUS_PACKET *reply)
 	case PW_CODE_ACCESS_ACCEPT:
 	case PW_CODE_ACCESS_REJECT:
 	case PW_CODE_ACCESS_CHALLENGE:
+	case PW_CODE_PROTOCOL_ERROR:
 		if (reply->data[1] != request->packet->id) {
 			ERROR("Invalid reply ID %d to Access-Request ID %d", reply->data[1], request->packet->id);
 			return -1;
@@ -1275,6 +1283,21 @@ static int recv_one_packet(int wait_time)
 		REDEBUG("Reply verification failed");
 		stats.lost++;
 		goto packet_done; /* shared secret is incorrect */
+	}
+
+	/*
+	 *	Check Original-Packet-Code.  We don't actually need it, but we check if it's wrong.
+	 */
+	if (reply->code == PW_CODE_PROTOCOL_ERROR) {
+		VALUE_PAIR *vp;
+
+		vp = fr_pair_find_by_num(reply->vps, 4, ((unsigned int) PW_EXTENDED_ATTRIBUTE_1 << 24), TAG_ANY);
+		if (!vp) {
+			RDEBUG("WARNING: Protocol-Error response is missing Original-Packet-Code");
+
+		} else if (vp->vp_integer != request->packet->code) {
+			RDEBUG("WARNING: Protocol-Error contains incorrect Original-Packet-Code %u", vp->vp_integer);
+		}
 	}
 
 	if (print_filename) {

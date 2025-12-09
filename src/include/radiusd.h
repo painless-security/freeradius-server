@@ -133,6 +133,7 @@ typedef struct main_config {
 	bool		proxy_requests;			//!< Toggle to enable/disable proxying globally.
 #endif
 	struct timeval	reject_delay;			//!< How long to wait before sending an Access-Reject.
+	bool		delay_proxy_rejects;		//!< do we delay proxied rejects
 	bool		status_server;			//!< Whether to respond to status-server messages.
 
 
@@ -183,6 +184,9 @@ typedef struct main_config {
 #ifdef ENABLE_OPENSSL_VERSION_CHECK
 	char const	*allow_vulnerable_openssl;	//!< The CVE number of the last security issue acknowledged.
 #endif
+
+	bool		group_stop_return;		//!< "return" stops at end of group
+	bool		policy_stop_return;		//!< "return" stops at end of policy
 } main_config_t;
 
 #if defined(WITH_VERIFY_PTR)
@@ -199,8 +203,9 @@ typedef struct main_config {
 typedef enum {
 	REQUEST_ACTIVE = 1,
 	REQUEST_STOP_PROCESSING,
+	REQUEST_TO_FREE,			//!< in the queue, and the queue should free it
 } rad_master_state_t;
-#define REQUEST_MASTER_NUM_STATES (REQUEST_STOP_PROCESSING + 1)
+#define REQUEST_MASTER_NUM_STATES (REQUEST_TO_FREE + )
 
 typedef enum {
 	REQUEST_QUEUED = 1,
@@ -234,6 +239,7 @@ struct rad_request {
 	VALUE_PAIR		*config;	//!< #VALUE_PAIR (s) used to set per request parameters
 						//!< for modules and the server core at runtime.
 
+	TALLOC_CTX		*ctx;		//!< talloc ctx for the request.  Either a pool, or the request itself.
 	TALLOC_CTX		*state_ctx;	//!< for request->state
 	VALUE_PAIR		*state;		//!< #VALUE_PAIR (s) available over the lifetime of the authentication
 						//!< attempt. Useful where the attempt involves a sequence of
@@ -256,6 +262,7 @@ struct rad_request {
 
 	RAD_REQUEST_FUNP	handle;		//!< The function to call to move the request through the
 						//!< various server configuration sections.
+	RAD_REQUEST_FUNP	original_handle; //!< as it says
 	rlm_rcode_t		rcode;		//!< Last rcode returned by a module
 	char const		*module;	//!< Module the request is currently being processed by.
 	char const		*component; 	//!< Section the request is in.
@@ -284,6 +291,7 @@ struct rad_request {
 	bool			max_time;	//!< did we hit max time?
 
 	bool			in_request_hash;
+	bool			eap_inner_tunnel;
 #ifdef WITH_PROXY
 	bool			in_proxy_hash;
 
@@ -322,9 +330,8 @@ struct rad_request {
 #define RAD_REQUEST_LVL_DEBUG4	(4)
 
 #define RAD_REQUEST_OPTION_COA		(1 << 0)
-#define RAD_REQUEST_OPTION_CTX 		(1 << 1)
-#define RAD_REQUEST_OPTION_CANCELLED	(1 << 2)
-#define RAD_REQUEST_OPTION_STATS	(1 << 3)
+#define RAD_REQUEST_OPTION_CANCELLED	(1 << 1)
+#define RAD_REQUEST_OPTION_STATS	(1 << 2)
 
 #define SECONDS_PER_DAY		86400
 #define MAX_REQUEST_TIME	30
@@ -464,7 +471,7 @@ int	regex_request_to_sub(TALLOC_CTX *ctx, char **out, REQUEST *request, uint32_t
 /*
  *	Named capture groups only supported by PCRE.
  */
-#  ifdef HAVE_PCRE
+#  if defined(HAVE_PCRE) || defined(HAVE_PCRE2)
 int	regex_request_to_sub_named(TALLOC_CTX *ctx, char **out, REQUEST *request, char const *name);
 #  endif
 #endif
@@ -490,7 +497,7 @@ void		version_print(void);
 char	*auth_name(char *buf, size_t buflen, REQUEST *request, bool do_cli);
 int		rad_authenticate (REQUEST *);
 int		rad_postauth(REQUEST *);
-int		rad_virtual_server(REQUEST *);
+int		rad_virtual_server(REQUEST *, bool check_username);
 
 /* exec.c */
 pid_t radius_start_program(char const *cmd, REQUEST *request, bool exec_wait,
@@ -544,6 +551,7 @@ int radius_copy_vp(TALLOC_CTX *ctx, VALUE_PAIR **out, REQUEST *request, char con
 /* threads.c */
 int	thread_pool_init(CONF_SECTION *cs, bool *spawn_flag);
 void	thread_pool_stop(void);
+void	thread_pool_free(void);
 int	thread_pool_addrequest(REQUEST *, RAD_REQUEST_FUNP);
 pid_t	rad_fork(void);
 pid_t	rad_waitpid(pid_t pid, int *status);

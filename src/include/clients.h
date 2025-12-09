@@ -46,6 +46,7 @@ typedef struct radclient {
 	fr_bool_auto_t 		require_ma;		//!< Require RADIUS message authenticator in requests.
 
 	bool			dynamic_require_ma;	//!< for dynamic clients
+	bool			protocol_error;		//!< can receive Protocol-Error replies
 
 	fr_bool_auto_t 		limit_proxy_state;     	//!< Limit Proxy-State in requests
 
@@ -79,7 +80,7 @@ typedef struct radclient {
 #endif
 #ifdef WITH_TLS
 	bool			tls_required;		//!< whether TLS encryption is required.
-
+	fr_tls_server_conf_t	*tls;
 #ifdef WITH_RADIUSV11
 	char const		*radiusv11_name;
 	fr_radiusv11_t 		radiusv11;

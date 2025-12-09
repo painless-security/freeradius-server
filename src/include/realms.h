@@ -82,6 +82,8 @@ typedef struct home_server {
 	fr_ipaddr_t		ipaddr;			//!< IP address of home server.
 	uint16_t		port;
 
+	uint32_t		affinity;		//!< for home server fail-over groups and EAP.
+
 	char const		*type_str;		//!< String representation of type.
 	home_type_t		type;			//!< Auth, Acct, CoA etc.
 
@@ -156,7 +158,7 @@ typedef struct home_server {
 #ifdef HAVE_TRUST_ROUTER_TR_DH_H
 	time_t			expiration;
 #endif
-
+	uint32_t		id;
 } home_server_t;
 
 
@@ -166,7 +168,8 @@ typedef enum home_pool_type_t {
 	HOME_POOL_FAIL_OVER,
 	HOME_POOL_CLIENT_BALANCE,
 	HOME_POOL_CLIENT_PORT_BALANCE,
-	HOME_POOL_KEYED_BALANCE
+	HOME_POOL_KEYED_BALANCE,
+	HOME_POOL_CONSISTENT_KEYED_BALANCE
 } home_pool_type_t;
 
 
@@ -183,6 +186,8 @@ typedef struct home_pool_t {
 	int			in_fallback;
 	time_t			time_all_dead;
 	time_t			last_serviced;
+
+	home_server_t		**affinity_group;
 
 	int			num_home_servers;
 	home_server_t		*servers[1];
@@ -230,7 +235,8 @@ home_server_t	*home_server_bynumber(int number);
 home_pool_t	*home_pool_byname(char const *name, int type);
 
 int		home_server_afrom_file(char const *filename);
-int		home_server_delete(char const *name, char const *type);
+int		home_server_delete_byname(char const *name, char const *type);
+int		home_server_delete(home_server_t *home);
 
 #ifdef __cplusplus
 }

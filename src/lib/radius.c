@@ -325,7 +325,11 @@ static int rad_sendto(int sockfd, void *data, size_t data_len, int flags,
 done:
 #endif
 	if (rcode < 0) {
-		fr_strerror_printf("sendto failed: %s", fr_syserror(errno));
+		if (errno == EMSGSIZE) {
+			fr_strerror_printf("sendto failed - destination does not support UDP fragmentation: %s", fr_syserror(errno));
+		} else {
+			fr_strerror_printf("sendto failed: %s", fr_syserror(errno));
+		}
 	}
 
 	return rcode;
@@ -863,6 +867,7 @@ static ssize_t vp2data_any(RADIUS_PACKET const *packet,
 	switch (vp->da->type) {
 	case PW_TYPE_STRING:
 	case PW_TYPE_OCTETS:
+	case PW_TYPE_ABINARY:
 		data = vp->data.ptr;
 		if (!data) return 0;
 		break;
@@ -872,9 +877,14 @@ static ssize_t vp2data_any(RADIUS_PACKET const *packet,
 	case PW_TYPE_IPV6_ADDR:
 	case PW_TYPE_IPV6_PREFIX:
 	case PW_TYPE_IPV4_PREFIX:
-	case PW_TYPE_ABINARY:
 	case PW_TYPE_ETHERNET:	/* just in case */
 		data = (uint8_t const *) &vp->data;
+		break;
+
+	case PW_TYPE_BOOLEAN:
+		len = 1;	/* just in case */
+		array[0] = vp->vp_boolean;
+		data = array;
 		break;
 
 	case PW_TYPE_BYTE:
@@ -978,6 +988,7 @@ static ssize_t vp2data_any(RADIUS_PACKET const *packet,
 		case PW_CODE_ACCESS_ACCEPT:
 		case PW_CODE_ACCESS_REJECT:
 		case PW_CODE_ACCESS_CHALLENGE:
+		case PW_CODE_PROTOCOL_ERROR:
 		default:
 			if (!original) {
 				fr_strerror_printf("ERROR: No request packet, cannot encrypt %s attribute in the vp.", vp->da->name);
@@ -1854,6 +1865,7 @@ int rad_encode(RADIUS_PACKET *packet, RADIUS_PACKET const *original,
 	case PW_CODE_ACCESS_ACCEPT:
 	case PW_CODE_ACCESS_REJECT:
 	case PW_CODE_ACCESS_CHALLENGE:
+	case PW_CODE_PROTOCOL_ERROR:
 		if (!original) {
 			fr_strerror_printf("ERROR: Cannot sign response packet without a request packet");
 			return -1;
@@ -1943,6 +1955,22 @@ int rad_encode(RADIUS_PACKET *packet, RADIUS_PACKET const *original,
 
 		ptr += 18;
 		total_length += 18;
+	}
+
+	/*
+	 *	For Protocol-Error, automatically add
+	 *	Original-Packet-Code after the Message-Authenticator.
+	 */
+	if (packet->code == PW_CODE_PROTOCOL_ERROR) {
+		ptr[0] = 241;	/* Extended-Attribute-1 */
+		ptr[1] = 7;
+		ptr[2] = 4;	/* Original-Packet-Code */
+				/* no length field */
+		ptr[3] = ptr[4] = ptr[5] = 0;
+		ptr[6] = original->code;
+
+		ptr += 7;
+		total_length += 7;
 	}
 
 	/*
@@ -2144,6 +2172,7 @@ int rad_sign(RADIUS_PACKET *packet, RADIUS_PACKET const *original,
 	case PW_CODE_DISCONNECT_NAK:
 	case PW_CODE_COA_ACK:
 	case PW_CODE_COA_NAK:
+	case PW_CODE_PROTOCOL_ERROR:
 		if (!original) {
 			fr_strerror_printf("ERROR: Cannot sign response packet without a request packet");
 			return -1;
@@ -2190,6 +2219,7 @@ int rad_sign(RADIUS_PACKET *packet, RADIUS_PACKET const *original,
 		case PW_CODE_DISCONNECT_NAK:
 		case PW_CODE_COA_ACK:
 		case PW_CODE_COA_NAK:
+		case PW_CODE_PROTOCOL_ERROR:
 			memcpy(hdr->vector, original->vector, AUTH_VECTOR_LEN);
 			break;
 
@@ -3074,6 +3104,7 @@ int rad_verify(RADIUS_PACKET *packet, RADIUSV11_UNUSED RADIUS_PACKET *original, 
 			case PW_CODE_DISCONNECT_NAK:
 			case PW_CODE_COA_ACK:
 			case PW_CODE_COA_NAK:
+			case PW_CODE_PROTOCOL_ERROR:
 				if (!original) {
 					fr_strerror_printf("Cannot validate Message-Authenticator in response "
 							   "packet without a request packet");
@@ -3170,6 +3201,7 @@ int rad_verify(RADIUS_PACKET *packet, RADIUSV11_UNUSED RADIUS_PACKET *original, 
 	case PW_CODE_DISCONNECT_NAK:
 	case PW_CODE_COA_ACK:
 	case PW_CODE_COA_NAK:
+	case PW_CODE_PROTOCOL_ERROR:
 		rcode = calc_replydigest(packet, original, secret);
 		if (rcode > 1) {
 			fr_strerror_printf("Received %s packet "
@@ -4188,7 +4220,7 @@ ssize_t data2vp(TALLOC_CTX *ctx,
 		break;
 
 	case PW_TYPE_ABINARY:
-		if (datalen > sizeof(vp->vp_filter)) goto raw;
+		if (datalen < 32) goto raw;
 		break;
 
 	case PW_TYPE_INTEGER:
@@ -4210,6 +4242,10 @@ ssize_t data2vp(TALLOC_CTX *ctx,
 	case PW_TYPE_IPV6_PREFIX:
 		if ((datalen < 2) || (datalen > 18)) goto raw;
 		if (data[1] > 128) goto raw;
+		break;
+
+	case PW_TYPE_BOOLEAN:
+		if (datalen != 1) goto raw;
 		break;
 
 	case PW_TYPE_BYTE:
@@ -4401,10 +4437,11 @@ alloc_raw:
 		break;
 
 	case PW_TYPE_ABINARY:
-		if (vp->vp_length > sizeof(vp->vp_filter)) {
-			vp->vp_length = sizeof(vp->vp_filter);
-		}
-		memcpy(vp->vp_filter, data, vp->vp_length);
+		fr_pair_value_memcpy(vp, data, vp->vp_length);
+		break;
+
+	case PW_TYPE_BOOLEAN:
+		vp->vp_boolean = (data[0] != 0);
 		break;
 
 	case PW_TYPE_BYTE:
@@ -4598,6 +4635,7 @@ ssize_t rad_vp2data(uint8_t const **out, VALUE_PAIR const *vp)
 	switch (vp->da->type) {
 	case PW_TYPE_STRING:
 	case PW_TYPE_OCTETS:
+	case PW_TYPE_ABINARY:
 		memcpy(out, &vp->data.ptr, sizeof(*out));
 		break;
 
@@ -4609,7 +4647,6 @@ ssize_t rad_vp2data(uint8_t const **out, VALUE_PAIR const *vp)
 	case PW_TYPE_IPV6_ADDR:
 	case PW_TYPE_IPV6_PREFIX:
 	case PW_TYPE_IPV4_PREFIX:
-	case PW_TYPE_ABINARY:
 	case PW_TYPE_ETHERNET:
 	case PW_TYPE_COMBO_IP_ADDR:
 	case PW_TYPE_COMBO_IP_PREFIX:

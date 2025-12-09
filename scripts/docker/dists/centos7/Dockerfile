@@ -4,13 +4,14 @@
 # Rebuild this file with `make docker.centos7.regen`
 #
 ARG from=centos:7
-FROM ${from} as build
+FROM ${from} AS build
 
 #
 #  CentOS 7 is now EOL, so we need to fix up the repo source
 #
 RUN sed -i "s/^mirrorlist/#mirrorlist/g" /etc/yum.repos.d/CentOS-*
 RUN sed -i "s|#\s*baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g" /etc/yum.repos.d/CentOS-*
+
 
 
 

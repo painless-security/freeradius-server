@@ -49,6 +49,10 @@ extern fr_cond_t	*debug_condition;
 fr_cond_t		*debug_condition = NULL;			//!< Condition used to mark packets up for checking.
 bool			event_loop_started = false;		//!< Whether the main event loop has been started yet.
 
+#ifdef HAVE_PCRE2
+#  include <freeradius-devel/regex.h>
+#endif
+
 typedef struct cached_config_t {
 	struct cached_config_t *next;
 	time_t		created;
@@ -201,6 +205,7 @@ static const CONF_PARSER log_config[] = {
 	{ "use_utc", FR_CONF_POINTER(PW_TYPE_BOOLEAN, &log_dates_utc), NULL },
 	{ "msg_denied", FR_CONF_POINTER(PW_TYPE_STRING, &main_config.denied_msg), "You are already logged in - access denied" },
 	{ "suppress_secrets", FR_CONF_POINTER(PW_TYPE_BOOLEAN, &main_config.suppress_secrets), NULL },
+	{ "timestamp", FR_CONF_POINTER(PW_TYPE_BOOLEAN, &default_log.timestamp), NULL },
 	CONF_PARSER_TERMINATOR
 };
 
@@ -211,6 +216,7 @@ static const CONF_PARSER log_config[] = {
 static const CONF_PARSER security_config[] = {
 	{ "max_attributes",  FR_CONF_POINTER(PW_TYPE_INTEGER, &fr_max_attributes), STRINGIFY(0) },
 	{ "reject_delay",  FR_CONF_POINTER(PW_TYPE_TIMEVAL, &main_config.reject_delay), STRINGIFY(0) },
+	{ "delay_proxy_rejects",  FR_CONF_POINTER(PW_TYPE_BOOLEAN, &main_config.delay_proxy_rejects), "no" },
 	{ "status_server", FR_CONF_POINTER(PW_TYPE_BOOLEAN, &main_config.status_server), "no"},
 	{ "require_message_authenticator", FR_CONF_POINTER(PW_TYPE_STRING, &require_message_authenticator), "auto"},
 	{ "limit_proxy_state", FR_CONF_POINTER(PW_TYPE_STRING, &limit_proxy_state), "auto"},
@@ -227,6 +233,15 @@ static const CONF_PARSER resources[] = {
 	 *	it exists.
 	 */
 	{ "talloc_pool_size", FR_CONF_POINTER(PW_TYPE_INTEGER, &main_config.talloc_pool_size), NULL },
+	CONF_PARSER_TERMINATOR
+};
+
+static const CONF_PARSER unlang_config[] = {
+	/*
+	 *	Unlang behaviour options
+	 */
+	{ "group_stop_return", FR_CONF_POINTER(PW_TYPE_BOOLEAN, &main_config.group_stop_return), "no" },
+	{ "policy_stop_return", FR_CONF_POINTER(PW_TYPE_BOOLEAN, &main_config.policy_stop_return), "no" },
 	CONF_PARSER_TERMINATOR
 };
 
@@ -282,6 +297,8 @@ static const CONF_PARSER server_config[] = {
 	{ "log_stripped_names", FR_CONF_POINTER(PW_TYPE_BOOLEAN | PW_TYPE_DEPRECATED, &log_stripped_names), NULL },
 
 	{  "security", FR_CONF_POINTER(PW_TYPE_SUBSECTION, NULL), (void const *) security_config },
+
+	{  "unlang", FR_CONF_POINTER(PW_TYPE_SUBSECTION, NULL), (void const *) unlang_config },
 	CONF_PARSER_TERMINATOR
 };
 
@@ -1203,11 +1220,15 @@ do {\
 	FR_INTEGER_COND_CHECK("max_request_time", main_config.max_request_time,
 			      (main_config.max_request_time != 0), 100);
 
+#ifndef USEC
+#define USEC (1000000)
+#endif
+
 	/*
 	 *	reject_delay can be zero.  OR 1 though 10.
 	 */
 	if ((main_config.reject_delay.tv_sec != 0) || (main_config.reject_delay.tv_usec != 0)) {
-		FR_TIMEVAL_BOUND_CHECK("reject_delay", &main_config.reject_delay, >=, 1, 0);
+		FR_TIMEVAL_BOUND_CHECK("reject_delay", &main_config.reject_delay, >=, 0, USEC / 2);
 	}
 
 	FR_INTEGER_BOUND_CHECK("proxy_dedup_window", main_config.proxy_dedup_window, <=, 10);
@@ -1323,6 +1344,19 @@ do {\
 	rad_assert(cs_cache == NULL);
 	cs_cache = cc;
 
+#ifdef HAVE_PCRE2
+	/*
+	 *	If pcre2 is being used for regex, we need to set up a global context
+	 *	to use our alloc / free routines.
+	 *	Since this is a library rather than module specific, it can't be done
+	 *	with a module bootstrap.
+	 */
+	if (fr_pcre2_gcontext_setup() < 0) {
+		ERROR("Failed creating pcre2 general context");
+		return -1;
+	}
+#endif
+
 	/* Clear any unprocessed configuration errors */
 	(void) fr_strerror();
 
@@ -1336,6 +1370,9 @@ int main_config_free(void)
 {
 	virtual_servers_free(0);
 
+#ifdef HAVE_PCRE2
+	fr_pcre2_gcontext_free();
+#endif
 	/*
 	 *	Clean up the configuration data
 	 *	structures.

@@ -190,10 +190,25 @@ rlm_rcode_t process_post_auth(UNUSED int postauth_type, UNUSED REQUEST *request)
 	return RLM_MODULE_FAIL;
 }
 
-
 fr_event_list_t *radius_event_list_corral(UNUSED event_corral_t hint)
 {
 	return NULL;
+}
+
+/*
+ *	These are shared with threads.c, and nothing else.
+ */
+void request_free(REQUEST *request) CC_HINT(nonnull);
+void request_done(REQUEST *request, int original) CC_HINT(nonnull);
+
+void request_free(UNUSED REQUEST *request)
+{
+	/* do nothing */
+}
+
+void request_done(UNUSED REQUEST *request, UNUSED int original)
+{
+	/* do nothing */
 }
 
 static void NEVER_RETURNS usage(void)
@@ -231,7 +246,7 @@ static const FR_NAME_NUMBER rc_request_types[] = {
 	{ NULL, 0}
 };
 
-int rad_virtual_server(REQUEST UNUSED *request)
+int rad_virtual_server(REQUEST UNUSED *request, bool UNUSED check_username)
 {
   /*We're not the server so we cannot do this*/
   abort();

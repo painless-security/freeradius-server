@@ -518,6 +518,8 @@ static const CONF_PARSER client_config[] = {
 	{ "require_message_authenticator", FR_CONF_POINTER(PW_TYPE_STRING| PW_TYPE_IGNORE_DEFAULT, &require_message_authenticator), NULL },
 	{ "limit_proxy_state", FR_CONF_POINTER(PW_TYPE_STRING| PW_TYPE_IGNORE_DEFAULT, &limit_proxy_state), NULL },
 
+	{ "protocol_error", FR_CONF_OFFSET(PW_TYPE_BOOLEAN, RADCLIENT, protocol_error), "no" },
+
 	{ "secret", FR_CONF_OFFSET(PW_TYPE_STRING | PW_TYPE_SECRET, RADCLIENT, secret), NULL },
 	{ "shortname", FR_CONF_OFFSET(PW_TYPE_STRING, RADCLIENT, shortname), NULL },
 
@@ -576,7 +578,7 @@ RADCLIENT_LIST *client_list_parse_section(CONF_SECTION *section, UNUSED bool tls
 		 *	But the list isn't _our_ list that we parsed,
 		 *	so we still need to parse the clients here.
 		 */
-		if (clients->parsed) return clients;		
+		if (clients->parsed) return clients;
 	} else {
 		clients = client_list_init(section);
 		if (!clients) return NULL;
@@ -734,6 +736,7 @@ static const CONF_PARSER dynamic_config[] = {
 	{ "FreeRADIUS-Client-Shortname",  FR_CONF_OFFSET(PW_TYPE_STRING, RADCLIENT, shortname), "" },
 	{ "FreeRADIUS-Client-NAS-Type",  FR_CONF_OFFSET(PW_TYPE_STRING, RADCLIENT, nas_type), NULL },
 	{ "FreeRADIUS-Client-Virtual-Server",  FR_CONF_OFFSET(PW_TYPE_STRING, RADCLIENT, server), NULL },
+	{ "FreeRADIUS-Client-Protocol-Error",  FR_CONF_OFFSET(PW_TYPE_BOOLEAN, RADCLIENT, protocol_error), NULL },
 
 	CONF_PARSER_TERMINATOR
 };
@@ -897,6 +900,7 @@ RADCLIENT *client_afrom_cs(TALLOC_CTX *ctx, CONF_SECTION *cs, bool in_server, bo
 {
 	RADCLIENT	*c;
 	char const	*name2;
+	CONF_SECTION	*tls;
 
 	name2 = cf_section_name2(cs);
 	if (!name2) {
@@ -937,6 +941,17 @@ RADCLIENT *client_afrom_cs(TALLOC_CTX *ctx, CONF_SECTION *cs, bool in_server, bo
 
 		return NULL;
 	}
+
+	/*
+	 *	Check the TLS configuration.
+	 */
+	tls = cf_section_sub_find(cs, "tls");
+#ifndef WITH_TLS
+	if (tls) {
+		cf_log_err_cs(cs, "TLS transport is not available in this executable");
+		goto error;
+	}
+#endif
 
 	/*
 	 *	Global clients can set servers to use, per-server clients cannot.
@@ -1219,10 +1234,27 @@ done_coa:
 	/*
 	 *	Be annoying to people, but it's about security.
 	 */
+#ifdef WITH_TLS
+	if (!c->tls_required && (strlen(c->secret) < 12)) {
+#else
 	if (strlen(c->secret) < 12) {
+#endif
 		WARN("Shared secret for client %s is short, and likely can be broken by an attacker.",
 		     c->shortname);
 	}
+
+#ifdef WITH_TLS
+	if (tls) {
+		/*
+		 *	Client TLS settings are taken from the
+		 *	_server_ configuration.  See listen.c, where
+		 *	client->tls is used as listener->tls.
+		 */
+		c->tls = tls_server_conf_parse(tls);
+		if (!c->tls) goto error;
+		c->tls->name = c->shortname;
+	}
+#endif
 
 	return c;
 }

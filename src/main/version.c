@@ -57,7 +57,20 @@ int ssl_check_consistency(void)
 	ssl_linked = SSLeay();
 
 	/*
-	 *	Major and minor versions mismatch, that's bad.
+	 *	Major mismatch, that's bad.
+	 */
+	if ((ssl_linked & 0xff000000) != (ssl_built & 0xff000000)) goto mismatch;
+
+	/*
+	 *	For OpenSSL 3, the minor versions are API/ABI compatible.
+	 *
+	 *	https://openssl-library.org/policies/releasestrat/index.html
+	 */
+	if ((ssl_linked & 0xff000000) >= 0x30000000) return 0;
+
+	/*
+	 *	For other versions of OpenSSL, the minor versions have
+	 *	to match, too.
 	 */
 	if ((ssl_linked & 0xfff00000) != (ssl_built & 0xfff00000)) goto mismatch;
 
@@ -413,7 +426,15 @@ void version_init_features(CONF_SECTION *cs)
 #endif
 				);
 
-#if !defined(HAVE_PCRE) && defined(HAVE_REGEX)
+	version_add_feature(cs, "regex-pcre2",
+#ifdef HAVE_PCRE2
+				true
+#else
+				false
+#endif
+				);
+
+#if !defined(HAVE_PCRE) && !defined(HAVE_PCRE2) && defined(HAVE_REGEX)
 	version_add_feature(cs, "regex-posix", true);
 	version_add_feature(cs, "regex-posix-extended",
 #  ifdef HAVE_REG_EXTENDED
@@ -617,12 +638,16 @@ void version_print(void)
 		DEBUG2("  ");
 	}
 	INFO("FreeRADIUS Version " RADIUSD_VERSION_STRING);
-	INFO("Copyright (C) 1999-2023 The FreeRADIUS server project and contributors");
+	INFO("Copyright (C) 1999-2025 The FreeRADIUS server project and contributors");
 	INFO("There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A");
 	INFO("PARTICULAR PURPOSE");
 	INFO("You may redistribute copies of FreeRADIUS under the terms of the");
 	INFO("GNU General Public License");
 	INFO("For more information about these matters, see the file named COPYRIGHT");
+	INFO("");
+	INFO("FreeRADIUS is developed, maintained, and supported by InkBridge Networks.");
+	INFO("For commercial support, please email sales@inkbridgenetworks.com");
+	INFO("https://inkbridgenetworks.com/");
 
 	fflush(NULL);
 }
